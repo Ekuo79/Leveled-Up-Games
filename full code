@@ -1,0 +1,207 @@
+from bs4 import BeautifulSoup
+import requests
+import lxml
+
+#class for page url
+class GamePage:
+  
+  def __init__(self, game):
+    self.game = game
+    
+
+  
+  def findUrl(game):
+    validGame = True
+    while validGame: 
+      try:
+        searchUrl = f'https://www.metacritic.com/search/game/{game}/results'
+        user_agent = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(searchUrl, headers = user_agent)
+
+        soup = BeautifulSoup(response.text, 'lxml')
+
+        gameSection = soup.find('li', class_= 'result first_result')
+        page = gameSection.h3.a['href']
+        pageurl = f'https://www.metacritic.com{page}'
+        return pageurl
+        validGame = False
+
+      except:
+        game = input('This game does not exsist. Please enter another game: ')
+
+  def genre(pageurl):
+    user_agent = {'User-Agent': 'Mozilla/5.0'}
+    response = requests.get(pageurl, headers = user_agent)
+
+    soup = BeautifulSoup(response.text, 'lxml')
+
+    genre = soup.find('li', class_ = 'summary_detail product_genre').text.replace(' ', '').split(':')[1]
+    genreList = (genre.split(','))
+    return genreList
+
+  def dev(pageurl):
+    user_agent = {'User-Agent': 'Mozilla/5.0'}
+    response = requests.get(pageurl, headers = user_agent)
+
+    soup = BeautifulSoup(response.text, 'lxml')
+
+    dev = soup.find('li', class_ = 'summary_detail developer').text.replace(' ', '').replace('\n','').split(':')[1]
+    devList = (dev.split(','))
+    return devList
+
+  def devUrl(pageurl):
+    allUrls = []
+    user_agent = {'User-Agent': 'Mozilla/5.0'}
+    response = requests.get(pageurl, headers = user_agent)
+
+    soup = BeautifulSoup(response.text, 'lxml')
+
+    devSection = soup.find('li', class_ = 'summary_detail developer')
+    for a in devSection.find_all('a', href = True):
+      finalDevUrl = 'https://www.metacritic.com'+ a['href'] + '?filter-options=games&num_items=30&sort_options=metascore'
+      allUrls.append(finalDevUrl)
+
+    return allUrls
+
+def devBased(sortedDevUrls, enteredList, resultList):
+    validGame = True
+    
+    while (validGame):
+      try:
+        currentUrl = sortedDevUrls[0]
+        user_agent = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(currentUrl, headers = user_agent)
+        
+        soup = BeautifulSoup(response.text, 'lxml')
+
+        gameSection1 = soup.find('td', class_ = 'title brief_metascore')
+        game1 = gameSection1.a['href']
+        gameUrl1 = f'https://www.metacritic.com{game1}'
+        if gameUrl1 in enteredList and gameUrl1 in resultList:
+          gameSection = soup.find('tr', class_ ='alt')
+
+          for a in gameSection.find_all('a', href = True):
+            gameUrlSection = gameSection.a
+            gameUrl = gameUrlSection['href']
+            gameUrls = f'https://www.metacritic.com{gameUrl}'
+            return(gameUrls)
+        else:
+          return gameUrl1
+        validGame = False
+
+      except:
+        break
+        validGame = False
+
+def genreBased(GenreList):
+  validGame = True
+  allGames = []
+  while (validGame):
+      try:
+        Genres = list(GenreList)
+        currentGenre = Genres[0]
+        currentUrl = 'https://www.metacritic.com/browse/games/genre/metascore/' + currentGenre + '/all'
+        user_agent = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(currentUrl, headers = user_agent)
+        
+        soup = BeautifulSoup(response.text, 'lxml')
+
+        for a in soup.find_all('a', class_ = 'title', href = True)[0:100]:
+  
+          gameUrl = a['href']
+          gameUrls = f'https://www.metacritic.com{gameUrl}'
+          allGames.append(gameUrls)
+
+        return allGames
+        validGame = False
+
+      except:
+        print("error")
+        
+def returnName(link):
+  user_agent = {'User-Agent': 'Mozilla/5.0'}
+  response = requests.get(link, headers = user_agent)
+
+  soup = BeautifulSoup(response.text, 'lxml')
+
+  title = soup.find('div', class_ = 'product_title').text.replace("\n",'').replace(' ','')
+  import re
+  title = re.sub("([A-Z])"," \g<0>",title)
+  return title
+  
+  
+
+enteredList = []
+resultList = []
+TotalGenreList = []
+TotalDevList = []
+devUrls = []
+
+
+
+
+
+for i in range(3):
+  
+  game = input("Enter one of your favorite games: ")
+  url = (GamePage.findUrl(game))
+  enteredList.append(url)
+  print(url)
+
+  TotalGenreList.extend(GamePage.genre(url))
+  TotalDevList.extend(GamePage.dev(url))
+  devUrls.extend(GamePage.devUrl(url))
+
+from collections import Counter
+ 
+# sorting on basis of frequency of elements
+sortedGenreList = [item for items, c in Counter(TotalGenreList).most_common()
+                                      for item in [items] * c]
+sortedDevList = [item for items, c in Counter(TotalDevList).most_common()
+                                      for item in [items] * c]
+sortedDevUrls = [item for items, c in Counter(devUrls).most_common()
+                                      for item in [items] * c]
+
+
+for i in devUrls:
+  resultList.append(devBased(sortedDevUrls, enteredList, resultList))
+  sortedDevUrls.pop(0)
+
+setGenreList = set(sortedGenreList)
+outputGenreList = []
+
+outputGenreList.extend(genreBased(setGenreList))
+
+
+
+  
+
+
+
+print("\n" + 'You like these types of games: ')
+for i in set(sortedGenreList):
+  print(i, end=', ')
+
+print("\n\n")
+print('Here are some recommended games based on genre: ')
+
+resultLinks = []
+
+for i in range(3):
+  import random
+  num = (random.randint(0,len(outputGenreList) - 1))
+  resultLinks.append(outputGenreList[num])
+
+for i in resultLinks:
+  print(returnName(i))
+
+print("\n\n")
+print('Here are some recommended games based on developers: ')
+for i in resultList:
+  print(returnName(i))
+
+
+
+
+
+
